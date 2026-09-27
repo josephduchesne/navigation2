@@ -394,6 +394,7 @@ TEST_F(MapIOTester, saveInvalidParameters)
   ASSERT_FALSE(saveMapToFile(map_msg, saveParameters));
 }
 
+// The following test was created with AI tools, verified + commented by a human
 // Confirm that the vertical flip is handled properly for both color and alpha layers
 TEST_F(MapIOTester, loadAlphaMaskFollowsVerticalFlip)
 {
