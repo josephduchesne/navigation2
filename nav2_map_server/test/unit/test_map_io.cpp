@@ -41,6 +41,7 @@
 #include <fstream>
 #include <cstdint>
 
+#include "Magick++.h"
 #include "yaml-cpp/yaml.h"
 #include "nav2_map_server/map_io.hpp"
 #include "nav2_map_server/map_server.hpp"
@@ -391,6 +392,46 @@ TEST_F(MapIOTester, saveInvalidParameters)
 
   saveParameters.map_file_name = path("/invalid_path") / path(g_valid_map_name);
   ASSERT_FALSE(saveMapToFile(map_msg, saveParameters));
+}
+
+// Confirm that the vertical flip is handled properly for both color and alpha layers
+TEST_F(MapIOTester, loadAlphaMaskFollowsVerticalFlip)
+{
+  // Create a 1x2 image with an alpha channel to test vertical flipping
+  Magick::InitializeMagick(nullptr);
+
+  const std::string image_file =
+    (path(g_tmp_dir) / "alpha_vertical_map.png").string();
+
+  Magick::Image image(Magick::Geometry(1, 2), "white");
+  image.type(Magick::TrueColorMatteType);
+  image.depth(8);
+
+  // Black + Opaque top pixel
+  Magick::Color top = Magick::ColorGray(0.0);
+  top.alphaQuantum(OpaqueOpacity);
+  image.pixelColor(0, 0, top);
+
+  // White + Transparent bottom pixel
+  Magick::Color bottom = Magick::ColorGray(1.0);
+  bottom.alphaQuantum(TransparentOpacity);
+  image.pixelColor(0, 1, bottom);
+  image.write(image_file);
+
+  // Load + parse the image into the occupancy grid map message
+  LoadParameters loadParameters;
+  fillLoadParameters(image_file, loadParameters);
+  loadParameters.mode = MapMode::Trinary;
+
+  nav_msgs::msg::OccupancyGrid map_msg;
+  ASSERT_NO_THROW(loadMapFromFile(loadParameters, map_msg));
+  ASSERT_EQ(map_msg.info.width, 1u);
+  ASSERT_EQ(map_msg.info.height, 2u);
+  ASSERT_EQ(map_msg.data.size(), 2u);
+
+  // validate that both the color and alpha layers were flipped together correctly
+  EXPECT_EQ(map_msg.data[0], -1);   // Transparent bottom image row
+  EXPECT_EQ(map_msg.data[1], 100);  // Opaque black top image row
 }
 
 // Load valid YAML file and check for consistency
